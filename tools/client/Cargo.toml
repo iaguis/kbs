@@ -14,14 +14,14 @@ path = "src/main.rs"
 
 [dependencies]
 # TODO: change it to "0.8.0", once released.
-as-types = { git = "https://github.com/confidential-containers/attestation-service.git" }
+as-types = { git = "https://github.com/mkulke/attestation-service.git", rev = "02a0379"}
 anyhow.workspace = true
 api-server.workspace = true
 base64.workspace = true
 clap = { version = "4.0.29", features = ["derive"] }
 env_logger.workspace = true
 jwt-simple = "0.11.4"
-kbs_protocol = { git = "https://github.com/confidential-containers/guest-components" }
+kbs_protocol = { git = "https://github.com/mkulke/guest-components", rev = "9285caa" }
 log.workspace = true
 reqwest = { version = "0.11.18", default-features = false, features = ["cookies", "json"] }
 serde = { version = "1.0", features = ["derive"] }
