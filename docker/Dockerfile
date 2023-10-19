@@ -1,19 +1,17 @@
-FROM rust:slim as builder
+FROM ubuntu:22.04 as builder
 
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y \
     curl \
-    gpg \
-    gnupg-agent
+    gnupg2
 
-RUN curl -fsSL https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | \
+RUN curl -L https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | \
     gpg --dearmor --output /usr/share/keyrings/intel-sgx.gpg && \
-    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | \
-    tee /etc/apt/sources.list.d/intel-sgx.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
+    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu jammy main' > /etc/apt/sources.list.d/intel-sgx.list
+RUN apt-get update && \
+    apt-get install -y \
     libclang-dev \
     libprotobuf-dev \
     libssl-dev \
@@ -32,6 +30,11 @@ RUN wget https://go.dev/dl/go1.20.1.linux-amd64.tar.gz
 RUN tar -C /usr/local -xzf go1.20.1.linux-amd64.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
 
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN apt update
+RUN apt-get install -y build-essential libssl-dev pkg-config libtss2-dev
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Build and Install KBS
 WORKDIR /usr/src/kbs
 COPY . .
@@ -39,7 +42,7 @@ COPY . .
 ARG KBS_FEATURES=coco-as-builtin,rustls,resource,opa
 RUN cargo install --path src/kbs --no-default-features --features ${KBS_FEATURES}
 
-FROM debian:stable-slim
+FROM ubuntu:22.04
 
 RUN apt-get update && \
     apt-get install -y \
@@ -48,13 +51,14 @@ RUN apt-get update && \
     gnupg-agent
 
 # Install TDX Runtime Dependencies
-RUN curl -fsSL https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | \
-    gpg --dearmor --output /usr/share/keyrings/intel-sgx.gpg
-RUN echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu focal main' | tee /etc/apt/sources.list.d/intel-sgx.list
+RUN curl -L https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | \
+    gpg --dearmor --output /usr/share/keyrings/intel-sgx.gpg && \
+    echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu jammy main' > /etc/apt/sources.list.d/intel-sgx.list
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
     libsgx-dcap-default-qpl \
     libsgx-dcap-quote-verify \
+    libsgx-urts \
     libtdx-attest \
     tpm2-tools
 
@@ -69,4 +73,6 @@ ENV INTEL_PCCS_USE_SECURE_CERT false
 RUN sed -i "s|\"pccs_url\":.*$|\"pccs_url\":$INTEL_PCCS_URL,|" /etc/sgx_default_qcnl.conf; \
     sed -i "s/\"use_secure_cert\":.*$/\"use_secure_cert\":$INTEL_PCCS_USE_SECURE_CERT,/" /etc/sgx_default_qcnl.conf
 
-COPY --from=builder /usr/local/cargo/bin/kbs /usr/local/bin/kbs
+COPY sgx_default_qcnl.conf /etc/sgx_default_qcnl.conf
+
+COPY --from=builder /root/.cargo/bin/kbs /usr/local/bin/kbs
